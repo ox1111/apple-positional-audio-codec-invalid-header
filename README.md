@@ -1,4 +1,68 @@
 
+# CVE-2025-31200: OOB Read 기반 메모리 리크 분석
+
+## 🧠 개요
+이 취약점은 Apple의 CoreAudio의 APAC 디코더가 `mRemappingArray`와 실제 채널 수(permutation 대상)의 불일치로 인해 Out-of-Bounds (OOB) Read/Write를 유발할 수 있는 문제입니다.
+
+## 📦 핵심 구조
+```cpp
+output[channel] = input[remappingArray[channel]];
+```
+여기서 문제가 되는 것은 `remappingArray[channel]`이 유효한 범위를 넘어서는 경우, 메모리 외부에서 읽기를 수행하는 것입니다.
+
+---
+
+## 🔍 OOB Read 흐름
+
+```cpp
+for (int i = 0; i < totalChannels; ++i) {
+    uint8_t idx = mRemappingArray[i];  // ← OOB Read
+    output[i] = input[idx];            // ← OOB Read chain
+}
+```
+
+- mRemappingArray가 실제 4개만 선언돼 있으나,
+- mChannelLayoutTag를 조작해 250개 채널로 인식되면
+- i >= 4에서 remappingArray[i]는 OOB로 동작함
+
+---
+
+## 📌 메모리 리크 시나리오
+
+1. crafted `.caf` 또는 `.mp4`에서 `mChannelLayoutTag = 0xFFFA`로 설정
+2. remappingArray는 4개만 실제 할당되었지만, 디코더는 250개로 인식
+3. remappingArray[250]의 값을 읽으면 heap 내 다른 구조체나 값이 노출됨
+4. 그 값을 다시 input 인덱스로 사용하면서 더 깊은 OOB Read 발생 가능
+
+---
+
+## ✅ 실현 조건
+
+| 조건 | 설명 |
+|------|------|
+| ✔ remappingArray[i]가 OOB | mChannelLayoutTag 조작 |
+| ✔ input[] 접근이 무검증 | AVAudioDecoder 내부 로직 신뢰함 |
+| ✔ read된 값이 인덱스로 재활용됨 | input[idx] 가능 |
+
+---
+
+## 🧪 공격 흐름 요약
+
+1. `.caf` 파일 생성
+2. mChannelLayoutTag → 250개로 설정
+3. remappingArray 크기 → 4개로 제한
+4. LLDB나 GuardMalloc으로 확인 시 crash or 메모리 리크 확인 가능
+
+---
+
+## 💡 결론
+
+- 이 취약점은 단순한 heap overflow가 아닌 `잘못된 구조체 필드 조작`으로 인한 OOB Read로 메모리 leak 가능
+- 향후 ASLR 우회에 필요한 힌트 추출이나 힙 spray에도 사용 가능
+
+
+
+
 # 📎 CVE-2025-31200: CoreAudio APAC mRemappingArray OOB 취약점 상세 분석
 
 ## 🔍 요약
