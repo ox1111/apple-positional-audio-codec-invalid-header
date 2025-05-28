@@ -71,7 +71,7 @@ bt
 
 
 
-```
+```python
 # File: apac_lldb_hook.py
 # Description: LLDB hook script for observing APAC decoding crash context
 
@@ -88,7 +88,7 @@ def __lldb_init_module(debugger, internal_dict):
 
 ```
 
-```
+```bash
 #!/bin/bash
 
 # File: extract_crash_logs.sh
