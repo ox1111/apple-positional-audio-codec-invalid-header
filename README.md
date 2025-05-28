@@ -1,4 +1,108 @@
 
+# LLDB APAC OOB 자동 분석 스크립트 사용법
+
+---
+
+## ✅ 기능 요약
+
+- `DecodeAPACFrame()` 함수에 breakpoint 설정
+- `mRemappingArray`와 `mTotalComponents` 크기 비교
+- 불일치 시 Out-of-Bounds 접근 경고 자동 출력
+- 프레임 포인터(`frame`) 기준으로 메모리 64바이트 읽어서 덤프
+
+---
+
+## ▶️ 사용법
+
+```bash
+lldb your_player_binary
+(lldb) command script import apac_oob_analyzer.py
+(lldb) run output_apac_patch.mp4
+```
+
+---
+
+## 🧠 실행 시 출력 예
+
+```
+[>] mRemappingArray size: 2
+[>] mTotalComponents: 5
+[!] MISMATCH detected: RemappingArray vs TotalComponents
+  [=] remap[0] = 0
+  [=] remap[1] = 1
+  [!] remap[2] = <out-of-bounds access>
+  [!] remap[3] = <out-of-bounds access>
+  [!] remap[4] = <out-of-bounds access>
+[!] Potential OOB access will occur when accessing remap array beyond bounds.
+[>] Frame buffer sample at 0x12345678:
+aa bb cc dd ...
+```
+
+---
+
+## 📌 참고
+
+- 메모리 접근이 실패하면 에러 메시지 출력
+- `frame` 변수는 디버깅 바이너리에 따라 수동 수정 가능
+- 분석 정확도를 높이기 위해 디버그 심볼 포함 빌드 권장
+
+
+
+
+# File: apac_oob_analyzer.py
+# Description: LLDB script to detect and dump OOB memory access from mRemappingArray-based access
+
+import lldb
+import struct
+
+def __lldb_init_module(debugger, internal_dict):
+    debugger.HandleCommand("breakpoint set --name DecodeAPACFrame")
+    debugger.HandleCommand("breakpoint command add 1 -f apac_oob_analyzer.dump_and_analyze_oob")
+    print("[*] OOB analyzer hook set on DecodeAPACFrame")
+
+def dump_and_analyze_oob(frame, bp_loc, dict):
+    target = frame.GetThread().GetProcess().GetTarget()
+    process = target.GetProcess()
+
+    # Step 1: Get mRemappingArray and its size
+    remap_var = frame.FindVariable("mRemappingArray")
+    count = remap_var.GetNumChildren()
+    print(f"[>] mRemappingArray size: {count}")
+
+    # Step 2: Get total channel components
+    total_var = frame.FindVariable("mTotalComponents")
+    total = total_var.GetValueAsUnsigned()
+    print(f"[>] mTotalComponents: {total}")
+
+    # Step 3: Compare and analyze
+    if count != total:
+        print("[!] MISMATCH detected: RemappingArray vs TotalComponents")
+
+        for i in range(total):
+            if i < count:
+                index_val = remap_var.GetChildAtIndex(i).GetValueAsUnsigned()
+                print(f"  [=] remap[{i}] = {index_val}")
+            else:
+                print(f"  [!] remap[{i}] = <out-of-bounds access>")
+
+        print("[!] Potential OOB access will occur when accessing remap array beyond bounds.")
+
+    else:
+        print("[+] mRemappingArray and totalComponents match")
+
+    # Optional: dump memory nearby (simulate frame buffer dump)
+    frame_buffer_ptr = frame.FindVariable("frame").GetValueAsUnsigned()
+    error = lldb.SBError()
+    mem = process.ReadMemory(frame_buffer_ptr, 64, error)
+    if error.Success():
+        hex_bytes = ' '.join(f"{b:02x}" for b in mem)
+        print(f"[>] Frame buffer sample at 0x{frame_buffer_ptr:x}:\n{hex_bytes}")
+    else:
+        print(f"[!] Failed to read frame buffer memory at 0x{frame_buffer_ptr:x}")
+
+
+
+
 # APAC Exploit Crash 분석 도구 사용법
 
 ---
