@@ -71,7 +71,7 @@ bt
 
 
 
-
+```
 # File: apac_lldb_hook.py
 # Description: LLDB hook script for observing APAC decoding crash context
 
@@ -86,7 +86,9 @@ def __lldb_init_module(debugger, internal_dict):
     debugger.HandleCommand('breakpoint command add 1 -o "bt"')
     print("[*] DecodeAPACFrame hook installed.")
 
+```
 
+```
 #!/bin/bash
 
 # File: extract_crash_logs.sh
@@ -106,6 +108,7 @@ for file in "$LOG_DIR"/*.crash; do
     fi
 done
 
+```
 
 # APACExploitPlayer 사용법
 
