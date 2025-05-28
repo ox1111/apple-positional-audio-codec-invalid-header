@@ -1,4 +1,76 @@
 
+# APAC Exploit Crash 분석 도구 사용법
+
+---
+
+## 📁 1. 시스템 크래시 로그 추출: `extract_crash_logs.sh`
+
+### ✅ 사용 전 준비
+```bash
+chmod +x extract_crash_logs.sh
+```
+
+### ▶️ 실행
+```bash
+./extract_crash_logs.sh
+```
+
+### 📄 동작 방식
+- macOS의 사용자 크래시 로그 위치:
+  ```
+  ~/Library/Logs/DiagnosticReports/*.crash
+  ```
+- `"output_apac_patch"`로 시작된 앱의 `.crash` 파일 중
+  - `APACChannelRemapper`
+  - `DecodeAPACFrame`
+  - `memmove`
+  관련 스택을 자동으로 출력
+
+---
+
+## 🧠 2. LLDB 후킹 자동화: `apac_lldb_hook.py`
+
+### ✅ 사용법
+
+```bash
+lldb /경로/실행파일
+(lldb) command script import apac_lldb_hook.py
+(lldb) run output_apac_patch.mp4
+```
+
+### 📄 후킹 내용
+
+- `DecodeAPACFrame()` 함수에 breakpoint 설정
+- 아래 정보 자동 출력:
+  - `mRemappingArray`
+  - `mChannelLayout`
+  - `mTotalComponents`
+  - 현재 레지스터
+  - 백트레이스
+
+### 💡 LLDB에서 수동 확인하고 싶은 경우
+
+```bash
+frame variable mRemappingArray
+frame variable mChannelLayout
+frame variable mTotalComponents
+register read
+bt
+```
+
+---
+
+## 🧪 사용 목적
+
+이 도구들은 APAC PoC 오디오 재생 시 발생하는 충돌에 대해:
+
+- 시스템 `.crash` 로그를 자동 수집하고
+- 런타임 메모리 상태를 LLDB에서 자동 추적하도록 하여
+- 취약점을 정밀 분석할 수 있도록 설계되었습니다.
+
+
+
+
 
 # File: apac_lldb_hook.py
 # Description: LLDB hook script for observing APAC decoding crash context
