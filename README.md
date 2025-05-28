@@ -1,4 +1,117 @@
 
+# CVE-2025-31200 분석 및 번역 요약
+
+이 게시물은 Apple의 CoreAudio 시스템에서 발견된 보안 취약점인 **CVE-2025-31200**에 대한 **PoC(Proof-of-Concept)** 설명이며, **iOS 18.4.1**에서 해당 문제가 패치되었음을 전제로 **macOS < 15.4.1** 환경에서 재현 가능한 취약점을 다루고 있습니다. 아래에 전체 내용을 **번역 + 분석 + 기술 스택 설명 + 재현 단계**로 정리합니다.
+
+---
+
+## 🔍 핵심 개요
+
+- **취약점명:** CVE-2025-31200  
+- **위치:** `AudioCodecs` → `APACChannelRemapper::Process` 함수  
+- **PoC 동작환경:** macOS 15.4.1 이전 버전에서 재현 가능  
+- **취약 동작:** `mRemappingArray`와 `permutation map` 사이의 불일치로 인해 디코딩 중 **Out-of-Bounds Read/Write 발생**  
+- **결과:** 크래시 또는 제한적이지만 통제 가능한 메모리 쓰기 (Controlled Write)  
+- **형식:** `output.mp4` 오디오 파일을 재생하면, 특정 조건에서 **EXC_BAD_ACCESS** 발생  
+
+---
+
+## 🧠 번역 및 단계별 설명
+
+### 🔸 상단 요약
+
+> 이 PoC는 CVE-2025-31200의 취약점을 시연하며, `APACChannelRemapper::Process`에서 OOB Write가 발생함.
+
+- mChannelLayoutTag의 하위 2바이트로 `mRemappingArray` 크기를 결정  
+- 이후 실제 디코딩 시점에는 `mTotalComponents`로 실제 프레임 데이터를 처리  
+- 이 불일치로 **frame 데이터를 remapping할 때 buffer overflow** 발생  
+
+### 🔸 재현 환경
+
+- **macOS < 15.4.1**
+- `output.mp4` 파일을 AVAudioPlayer 등으로 재생
+- `lldb`에서 `check-mismatch` 후크를 걸어 내부 mismatch를 추적
+
+### 🔸 발견 내용
+
+- GuardMalloc을 활성화하면 **`APACChannelRemapper::Process` 함수에서 읽기 OOB**
+- GuardMalloc 없이 실행하면 **`_platform_memmove` 함수에서 쓰기 OOB 발생**
+
+```bash
+lldb run output.mp4
+# crash at: APACChannelRemapper::Process
+# or later at: _platform_memmove
+```
+
+---
+
+## 💻 사용 기술 스택
+
+| 구성 요소           | 설명                                      |
+|--------------------|-------------------------------------------|
+| **AudioToolbox**   | Apple의 CoreAudio 라이브러리 (프레임워크) |
+| **APAC**           | Apple Positional Audio Codec               |
+| **HOA**            | Higher-order Ambisonics                   |
+| **LLDB**           | 디버깅 도구, 후킹 및 메모리 확인용         |
+| **afconvert**      | 오디오 변환 도구 (`wav → apac`)            |
+| **Bindiff**        | iOS 18.4 vs 18.4.1의 바이너리 비교         |
+| **Guard Malloc**   | 메모리 오류 탐지 툴 (Xcode에서 사용 가능) |
+| **Xcode + macOS**  | 디버깅 및 디코딩 환경                      |
+| **output.mp4**     | PoC 오디오 파일                            |
+
+---
+
+## 🧪 기술 재현 방법
+
+### 1. 취약 macOS 버전 설치
+- `macOS < 15.4.1` 환경 필요 (취약 함수 미패치)
+
+### 2. PoC 오디오 파일 준비
+
+```bash
+afconvert -o output.mp4 -d apac -f mp4f sound440hz.wav
+```
+
+### 3. LLDB 후크 스크립트 준비
+
+```lldb
+# check-mismatch 후크 스크립트 사용
+command script import check-mismatch.py
+```
+
+### 4. 디버깅 실행
+
+```bash
+lldb ./audio_player_binary
+(lldb) run output.mp4
+(lldb) bt  # Backtrace to see crash in APACChannelRemapper::Process or memmove
+```
+
+### 5. Guard Malloc으로 보호 메모리 추적
+- Xcode → Scheme → Diagnostics → Enable Guard Malloc 체크
+
+---
+
+## 📸 첨부 이미지 분석
+
+### 📷 이미지 1
+- 크래시 위치: `APACChannelRemapper::Process`
+- 문제 주소: `0x37c1ce000`에 접근 중 **EXC_BAD_ACCESS**
+- Backtrace를 보면 `mRemappingArray` 접근에서 쓰기/읽기 오류 발생
+- Thread 13 (AQConverterThread)에서 실행 중
+
+### 📷 이미지 2
+- 크래시 위치: `_platform_memmove`
+- 문제 주소: `0x4d` → 명백한 NULL 또는 잘못된 오프셋 메모리 복사 시도
+- remapping 결과를 복사 중 invalid access
+
+---
+
+
+
+
+
+
 # CVE-2025-31200 - Apple CoreAudio APACChannelRemapper Exploit (PoC)
 
 This repository demonstrates a proof-of-concept for CVE-2025-31200, a vulnerability in Apple's CoreAudio `APACChannelRemapper::Process` function, discovered in iOS 18.4 and patched in iOS 18.4.1 / macOS 15.4.1.
