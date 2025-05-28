@@ -377,6 +377,56 @@ GitHub에 이슈 제출 시 이 구조를 그대로 복사하여 사용 가능�
 
 
 
+# FFmpeg APAC Codec Test
+
+This directory demonstrates a reproducible issue with FFmpeg's lack of support for Apple's APAC (Positional Audio Codec) format, present in `.mov` files recorded on newer iPhones (e.g., iPhone 16 and later).
+
+## Files
+
+- `IMG_0755.mov`: Sample MOV file containing APAC audio (download separately)
+- `test_poc.sh`: Bash script that attempts to extract the APAC audio stream
+- `output_apac.m4a`: Expected (but likely failed) output file from FFmpeg
+
+## How to Run
+
+Make sure you have FFmpeg installed and executable from the command line.
+
+```bash
+chmod +x test_poc.sh
+./test_poc.sh
+```
+
+## Expected Output
+
+You will see an error such as:
+
+```
+Could not find codec parameters for stream 1 (Audio: none (apac / 0x63617061), ...)
+Decoding requested, but no decoder found for: none
+```
+
+## Notes
+
+- This is a known FFmpeg issue tracked in [ticket #11480](https://trac.ffmpeg.org/ticket/11480)
+- You can submit feedback or a patch to the FFmpeg GitHub project to help resolve this
+
+test_poc.sh
+
+#!/bin/bash
+
+# File: test_poc.sh
+# Description: Attempt to extract APAC audio stream using FFmpeg
+
+INPUT_FILE="IMG_0755.mov"
+OUTPUT_FILE="output_apac.m4a"
+
+echo "[*] Checking stream information..."
+ffmpeg -i "$INPUT_FILE"
+
+echo "[*] Attempting to extract APAC audio stream (Stream #1 assumed)..."
+ffmpeg -i "$INPUT_FILE" -map 0:1 -c:a copy "$OUTPUT_FILE"
+
+
 
 
 ------------------------------------------------------------
