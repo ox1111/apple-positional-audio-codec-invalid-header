@@ -1,5 +1,40 @@
 
 
+# File: apac_lldb_hook.py
+# Description: LLDB hook script for observing APAC decoding crash context
+
+import lldb
+
+def __lldb_init_module(debugger, internal_dict):
+    debugger.HandleCommand('breakpoint set --name DecodeAPACFrame')
+    debugger.HandleCommand('breakpoint command add 1 -o "frame variable mRemappingArray"')
+    debugger.HandleCommand('breakpoint command add 1 -o "frame variable mChannelLayout"')
+    debugger.HandleCommand('breakpoint command add 1 -o "frame variable mTotalComponents"')
+    debugger.HandleCommand('breakpoint command add 1 -o "register read"')
+    debugger.HandleCommand('breakpoint command add 1 -o "bt"')
+    print("[*] DecodeAPACFrame hook installed.")
+
+
+#!/bin/bash
+
+# File: extract_crash_logs.sh
+# Description: Scans system crash logs for APAC exploit-related crashes (APACChannelRemapper or memmove)
+
+LOG_DIR="$HOME/Library/Logs/DiagnosticReports"
+TARGET="output_apac_patch"
+
+echo "[*] Scanning crash logs in: $LOG_DIR"
+echo
+
+for file in "$LOG_DIR"/*.crash; do
+    if grep -q "$TARGET" "$file"; then
+        echo "[+] Found crash log: $file"
+        grep -A20 -Ei "(APACChannelRemapper|memmove|DecodeAPACFrame)" "$file"
+        echo "----------------------------------------"
+    fi
+done
+
+
 # APACExploitPlayer 사용법
 
 ---
