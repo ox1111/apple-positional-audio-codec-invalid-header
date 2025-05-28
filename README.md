@@ -1,4 +1,132 @@
 
+# CVE-2025-31200 Deep Technical Analysis
+
+---
+
+## 📌 Part 1: mRemappingArray와 Permutation Map 불일치 구조 분석
+
+### 구조도 설명
+
+```
+mChannelLayoutTag = 0x02 → 하위 2바이트로 mRemappingArray 크기 결정
+mRemappingArray (크기 3개): [0, 1, 2]
+APACFrame (실제 데이터 5개): [0, 1, 2, 3, 4]
+```
+
+→ 문제: `remappingArray.size = 3`, `channel count = 5`
+
+```asm
+// 예시 (ARM64)
+LDR     x9, [x8, #0x8]     ; x9 = mRemappingArray[i]
+LDR     x10, [frame, x9, LSL #3]  ; x10 = frame[x9]
+STR     x10, [output, i, LSL #3] ; output[i] = frame[x9]
+```
+
+→ `x9`가 0~2일 것으로 예상하지만, 실제는 더 큰 인덱스를 접근해 **frame 밖을 읽거나 씀**.
+
+---
+
+## 🧨 Part 2: OOB Write 동작 흐름
+
+### 발생 경로
+
+```
+1. mRemappingArray[i] = 4
+2. frame size = 4 (index 0~3)
+3. LDR x10, [frame, x9, LSL #3] → OOB Read
+4. STR x10, [output, i, LSL #3] → OOB Write
+```
+
+이 때 x9=4이면:
+
+```
+[frame + (4 << 3)] → frame+32 = 외부 메모리 접근
+```
+
+---
+
+## 🚀 Part 3: Exploit 흐름도
+
+```text
++----------------------------+
+| Crafted .mp4 (APAC audio) |
++----------------------------+
+             |
+             v
++-------------------------------+
+| mRemappingArray mismatch     |
+| mChannelLayoutTag = 0x02     |
+| but frame has 5+ components  |
++-------------------------------+
+             |
+             v
++----------------------------+
+| APACChannelRemapper::Process |
++----------------------------+
+             |
+             v
++-------------------+      YES       +--------------------------+
+| Bounds Check?     |  ------------> | OOB Write (frame buffer) |
++-------------------+                +--------------------------+
+        |
+       NO
+        v
++----------------------------+
+| Crash or silent corruption |
++----------------------------+
+```
+
+---
+
+## 🛠️ Part 4: 취약한 .mp4 생성 PoC (afconvert)
+
+```bash
+# sound440.wav: 5채널 dummy 오디오 (manually crafted)
+afconvert -o output.mp4 -d apac -f mp4f sound440.wav
+```
+
+or Objective-C++로:
+
+```objc
+apacFormat.mChannelsPerFrame = 5;
+apacFormat.mChannelLayoutTag = 0x02; // Indicates 2 channels
+```
+
+→ 이 불일치가 exploit 유도
+
+---
+
+## 🔀 Part 5: 패치 전후 코드 diff 분석
+
+### 🔴 Before (macOS < 15.4.1)
+
+```cpp
+mRemappingArray.resize(channelLayout->mChannelLayoutTag & 0xFFFF);
+```
+
+### ✅ After (macOS 15.4.1+)
+
+```cpp
+UInt32 expectedCount = channelLayout->mNumberChannelDescriptions;
+if (expectedCount != (mChannelLayoutTag & 0xFFFF)) {
+    return kAudioFormatUnsupportedDataFormatError;
+}
+```
+
+→ 검증 추가: **Remapping count == channel description count** 확인
+
+---
+
+## ✅ 결론
+
+- mChannelLayoutTag 기반으로 remap 배열을 만들면서, 실 채널 수 검증 생략
+- 이로 인해 디코더가 **Out-of-Bounds Write** 유발
+- Patch는 이 두 값의 일치를 **사전 검사**함으로써 해결
+
+
+
+
+
 # CVE-2025-31200 분석 및 번역 요약
 
 이 게시물은 Apple의 CoreAudio 시스템에서 발견된 보안 취약점인 **CVE-2025-31200**에 대한 **PoC(Proof-of-Concept)** 설명이며, **iOS 18.4.1**에서 해당 문제가 패치되었음을 전제로 **macOS < 15.4.1** 환경에서 재현 가능한 취약점을 다루고 있습니다. 아래에 전체 내용을 **번역 + 분석 + 기술 스택 설명 + 재현 단계**로 정리합니다.
