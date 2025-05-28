@@ -1,4 +1,88 @@
 
+# 📎 CVE-2025-31200: CoreAudio APAC mRemappingArray OOB 취약점 상세 분석
+
+## 🔍 요약
+- 취약점 위치: `APACHOADecoder::DecodeAPACFrame` → `APACChannelRemapper::Process`
+- 취약 원인: `mRemappingArray`의 길이와 실제 오디오 프레임의 채널 수(permutation map) 간 불일치
+- 주요 증상: `memmove`나 채널 remap 시 OOB Read/Write 발생
+- 트리거 조건: 잘못 조작된 `mChannelLayoutTag` 값과 frame header
+
+---
+
+## 🔬 구조 요약: 오디오 디코딩 흐름
+
+1. **Frame Header Parsing**
+   - APAC 프레임 헤더 내에 `mChannelLayoutTag` 값 포함
+   - 하위 2바이트로 `mRemappingArray`의 길이 결정 (예: `tag = 0xABCD` → length = 0xCD)
+
+2. **Remapping Array 생성**
+   - 배열 크기: `uint8_t mRemappingArray[layoutTag & 0xFFFF]`
+   - 구조 (메모리 상):  
+     ```
+     +---------------------------+
+     | mRemappingArray[0]       |  --> 채널 0에 해당하는 인덱스
+     | mRemappingArray[1]       |  --> 채널 1에 해당하는 인덱스
+     | ...                      |
+     +---------------------------+
+     ```
+
+3. **Frame Processing**
+   - 채널 데이터 remap 시 permutation map 으로 `mRemappingArray[i]` 사용
+   - 이때 참조되는 실제 채널 수는 `frame->mTotalComponents` 기준
+
+---
+
+## 💥 Exploit 조건 분석
+
+### 🎯 Exploit 핵심
+
+```text
+실제 frame 내 채널 수: 4 (예: 4.0)
+mRemappingArray 길이: 0xFF (255)
+→ 채널 4 이상 참조 OOB 발생
+```
+
+---
+
+## 🧠 어셈블리 단위 분석 (macOS, ARM64 기준)
+
+```asm
+LDRB    W8, [X21, X0]      ; X21 = &mRemappingArray, X0 = loop index
+STR     W8, [X22, X0, LSL #2] ; 쓰기: output[channel] = remapped[channel]
+```
+
+→ 만약 X0가 250 이상이면 `[X21 + 250]`를 읽고 `[X22 + 1000]`에 씀  
+→ 이 주소는 mRemappingArray 영역 밖이므로 OOB 발생
+
+---
+
+## 🧱 구조 시각화 (bit/byte 단위)
+
+```
+Input Buffer (APAC Frame)             Decoder Internal Memory
+
++-------------+                 +-----------------------------+
+| Frame Header|--+         --> | uint8_t mRemappingArray[4]  |
++-------------+  |             +-----------------------------+
+                 |
+                 +---->    +---------------------------+
+                           | permute(frame_data[i], mRemappingArray[i]) |
+                           +---------------------------+
+                                 ↓
+                     OOB Write to audio_output[i]
+```
+
+---
+
+## 🔚 결론
+
+- 조작된 `.mp4` 또는 `.caf` 오디오에 `mChannelLayoutTag` 값만 조정해도 OOB 발생
+- Apple은 18.4.1에서 remappingArray의 사이즈를 `AudioChannelLayout @ offset 0x58` 기준으로 validate 하여 패치함
+- 이 validate 전 우회하여 공격 가능
+
+
+
+
 # APAC ROP Payload 자동 변환 스크립트
 
 ## 스크립트: `mp4_rop_convert.sh`
