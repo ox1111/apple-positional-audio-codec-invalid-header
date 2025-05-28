@@ -280,6 +280,101 @@ MIT License
 
 
 
+# FFmpeg Enhancement 요청 #11480 확장: APAC 코덱 PoC 및 제출 템플릿
+
+---
+
+## 🔧 1. PoC 코드 예시: APAC 트랙 존재 확인 및 추출 실패 확인
+
+다음 FFmpeg 스크립트는 `.mov` 파일 내 APAC 트랙을 확인하고, 디코딩 시도를 통해 실패 여부를 확인합니다.
+
+```bash
+#!/bin/bash
+
+INPUT_FILE="IMG_0755.mov"
+OUTPUT_FILE="output.m4a"
+
+echo "[*] 파일 내 스트림 정보 출력"
+ffmpeg -i "$INPUT_FILE"
+
+echo "[*] APAC 오디오 스트림 추출 시도"
+ffmpeg -i "$INPUT_FILE" -map 0:1 -c:a copy "$OUTPUT_FILE"
+```
+
+실행 시 예상 출력:
+```
+Could not find codec parameters for stream 1 (Audio: none (apac / 0x63617061), ...)
+Error opening output file ...
+```
+
+> 💡 `0:1`은 APAC 오디오 스트림을 의미하며, 스트림 번호는 파일에 따라 다를 수 있습니다.
+
+---
+
+## 🎵 2. 테스트 샘플 구조
+
+아래는 샘플 테스트 폴더 구조입니다:
+
+```
+ffmpeg-apac-test/
+├── IMG_0755.mov       # iPhone에서 추출한 테스트 파일
+├── test_poc.sh        # 위 PoC 스크립트
+├── README.md          # 재현 방법 정리
+```
+
+> 샘플 `.mov` 파일은 [FFastrans 포럼](https://ffastrans.com/frm/forum/download/file.php?id=1785)에서 다운로드 가능합니다.
+
+---
+
+## 📝 3. FFmpeg GitHub Issue 제출 템플릿
+
+```markdown
+### Summary
+
+FFmpeg currently fails to decode or map `.mov` files containing Apple’s new spatial audio codec APAC (`apac` / `0x63617061`), introduced with iPhone 16.
+
+### Reproduction
+
+1. Download [sample file](https://ffastrans.com/frm/forum/download/file.php?id=1785)
+2. Run:
+    ```bash
+    ffmpeg -i IMG_0755.mov -map 0:1 -c:a copy output.m4a
+    ```
+
+### Output
+
+```
+[mov,mp4,...] Could not find codec parameters for stream 1 (Audio: none (apac / 0x63617061), ...)
+[aist#0:1/none] Decoding requested, but no decoder found for: none
+```
+
+### Expected Behavior
+
+FFmpeg should:
+- Either ignore unsupported `apac` streams silently (like `-map 0:a?`)
+- Or implement fallback behavior or proper error
+
+### Environment
+
+- FFmpeg Version: git-master (latest)
+- Platform: Windows / macOS
+- Affected file: `.mov` with `apac` track
+
+### Proposed Solution
+
+Implement support for the `apac` codec, or allow clean skipping of unknown audio formats.
+
+Tag: `codec`, `apple`, `apac`, `spatial-audio`, `mov`
+
+```
+
+---
+
+## 📌 결론
+
+이 문서와 샘플은 FFmpeg 개발자에게 문제 재현과 기능 구현 필요성을 명확히 전달하기 위한 자료입니다.  
+GitHub에 이슈 제출 시 이 구조를 그대로 복사하여 사용 가능합니다.
+
 
 
 
